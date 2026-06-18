@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller build output
+build/
+dist/
+
+# user-specific runtime config (contains Radmin IP/ports)
+settings.json
+
+# backups / OS junk
+*.bak
+.DS_Store
+Thumbs.db
