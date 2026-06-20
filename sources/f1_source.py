@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 
 from .base import Frame, SourceBase
+from .net_frame import FrameServer
 from .f1_telemetry.listener import UdpListener
 from .f1_telemetry.store import TelemetryStore
 
@@ -29,13 +30,14 @@ def _reorder(seq):
 class F1Source(SourceBase):
     name = "F1 25"
 
-    def __init__(self, port: int = 20777):
+    def __init__(self, port: int = 20777, share_port=None):
         self.port = port
         self.store = TelemetryStore()
         self.listener = UdpListener(port=port)
         self.listener.packet.connect(self._on_packet)
         self._track_len_est = 0.0
         self._started = False
+        self._server = FrameServer(self.poll, share_port) if share_port else None
 
     # --- listener plumbing -------------------------------------------
     def _on_packet(self, pid, obj, header):
@@ -45,8 +47,12 @@ class F1Source(SourceBase):
         if not self._started:
             self.listener.start()
             self._started = True
+        if self._server:
+            self._server.start()
 
     def stop(self):
+        if self._server:
+            self._server.stop()
         try:
             self.listener.stop()
         except Exception:
@@ -59,7 +65,9 @@ class F1Source(SourceBase):
     # --- sampling -----------------------------------------------------
     def poll(self) -> Frame:
         s = self.store
-        f = Frame(t=time.monotonic(), game="F1 25")
+        gy = int(getattr(s, "game_year", 0) or 0)
+        game = "F1 %d" % gy if 23 <= gy <= 30 else "F1 25"
+        f = Frame(t=time.monotonic(), game=game)
         f.connected = s.is_live()
 
         f.track = s.track_name()

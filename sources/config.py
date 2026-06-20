@@ -15,6 +15,10 @@ DEFAULTS = {
     "lmu_port": 8000,
     "lmu_local": False,        # True -> read this PC's shared memory instead
     "f1_port": 20777,
+    "f1_host": "127.0.0.1",
+    "f1_local": True,          # True -> listen to the game on this PC
+    "f1_share": True,          # when local, re-broadcast to a strategist
+    "f1_link_port": 8100,      # TCP bridge port (share / connect)
     "iracing_host": "127.0.0.1",
     "iracing_port": 8100,
     "iracing_local": True,     # True -> read this PC's iRacing shared memory

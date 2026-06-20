@@ -81,9 +81,9 @@ class StartScreen(QtWidgets.QDialog):
         self.card_lmu = GameCard("LMU", "Le Mans\nUltimate",
                                  "Подключение по сети (Radmin IP + порт) "
                                  "к серверу LMU Pit Wall", theme.GEAR)
-        self.card_f1 = GameCard("F1 25", "F1 25",
-                                "Телеметрия по UDP — игра шлёт данные "
-                                "на этот ПК", theme.SPEED)
+        self.card_f1 = GameCard("F1 25/26", "F1 25 · 26",
+                                "UDP с игры + раздача стратегу по Radmin, "
+                                "или подключение к хосту", theme.SPEED)
         self.card_iracing = GameCard("iRACING", "iRacing",
                                      "Локально с этого ПК + раздача стратегу "
                                      "по Radmin, или подключение к хосту",
@@ -171,21 +171,50 @@ class StartScreen(QtWidgets.QDialog):
         g.setContentsMargins(0, 0, 0, 0)
         g.setHorizontalSpacing(12)
         g.setVerticalSpacing(10)
-        g.addWidget(self._cap("UDP-ПОРТ"), 0, 0)
+
+        g.addWidget(self._cap("ПОРТ ИГРЫ (UDP)"), 0, 0)
+        g.addWidget(self._cap("IP ХОСТА (RADMIN)"), 0, 1)
+        g.addWidget(self._cap("ПОРТ СВЯЗИ"), 0, 2)
         self.f1_port = QtWidgets.QLineEdit(str(self.cfg.get("f1_port", 20777)))
         self.f1_port.setValidator(QtGui.QIntValidator(1, 65535, self))
-        self.f1_port.setFixedHeight(34)
-        self.f1_port.setFixedWidth(140)
-        self.f1_port.setStyleSheet(self._edit_qss())
+        self.f1_host = QtWidgets.QLineEdit(str(self.cfg.get("f1_host", "")))
+        self.f1_host.setPlaceholderText("например 26.x.x.x")
+        self.f1_link = QtWidgets.QLineEdit(str(self.cfg.get("f1_link_port", 8100)))
+        self.f1_link.setValidator(QtGui.QIntValidator(1, 65535, self))
+        for e in (self.f1_port, self.f1_host, self.f1_link):
+            e.setFixedHeight(34)
+            e.setStyleSheet(self._edit_qss())
         g.addWidget(self.f1_port, 1, 0)
+        g.addWidget(self.f1_host, 1, 1)
+        g.addWidget(self.f1_link, 1, 2)
+
+        self.f1_local = QtWidgets.QCheckBox(
+            "Локально — слушать игру на этом ПК (я за рулём)")
+        self.f1_local.setChecked(bool(self.cfg.get("f1_local", True)))
+        self.f1_local.setStyleSheet(f"color:{theme.FG_DIM};font-size:12px;")
+        self.f1_local.toggled.connect(self._toggle_f1_local)
+        g.addWidget(self.f1_local, 2, 0, 1, 3)
+
+        self.f1_share = QtWidgets.QCheckBox(
+            "Раздавать стратегу по Radmin (порт связи)")
+        self.f1_share.setChecked(bool(self.cfg.get("f1_share", True)))
+        self.f1_share.setStyleSheet(f"color:{theme.FG_DIM};font-size:12px;")
+        g.addWidget(self.f1_share, 3, 0, 1, 3)
+
         hint = QtWidgets.QLabel(
-            "В F1 25: Settings → Telemetry → UDP Telemetry = On, порт = 20777, "
-            "60 Hz. Если игра на другом ПК — укажи в ней Radmin-IP этого ПК "
-            "как адрес получателя.")
+            "За рулём: «Локально» + «Раздавать». В игре F1 25/26: UDP Telemetry = On, "
+            "IP = 127.0.0.1, порт 20777, 60 Hz, Format 2025 или 2026. "
+            "Стратег: снять «Локально», вписать Radmin-IP пилота и порт связи 8100.")
         hint.setStyleSheet(f"color:{theme.FG_FAINT};font-size:11px;")
         hint.setWordWrap(True)
-        g.addWidget(hint, 2, 0, 1, 2)
+        g.addWidget(hint, 4, 0, 1, 3)
+        self._toggle_f1_local(self.f1_local.isChecked())
         return w
+
+    def _toggle_f1_local(self, on):
+        self.f1_port.setDisabled(not on)
+        self.f1_host.setDisabled(on)
+        self.f1_share.setDisabled(not on)
 
     def _iracing_panel(self):
         w = QtWidgets.QWidget()
@@ -267,10 +296,25 @@ class StartScreen(QtWidgets.QDialog):
                 src = LMUNetSource(host, port)
             self.manager = SingleManager(src, "LMU")
         elif self.game == "F1 25":
-            port = int(self.f1_port.text() or 20777)
-            self.cfg["f1_port"] = port
-            from sources.f1_source import F1Source
-            src = F1Source(port=port)
+            local = self.f1_local.isChecked()
+            self.cfg["f1_local"] = local
+            link = int(self.f1_link.text() or 8100)
+            self.cfg["f1_link_port"] = link
+            if local:
+                port = int(self.f1_port.text() or 20777)
+                self.cfg["f1_port"] = port
+                share = self.f1_share.isChecked()
+                self.cfg["f1_share"] = share
+                from sources.f1_source import F1Source
+                src = F1Source(port=port, share_port=link if share else None)
+            else:
+                host = self.f1_host.text().strip()
+                if not host:
+                    self.err.setText("Укажите Radmin-IP пилота.")
+                    return
+                self.cfg["f1_host"] = host
+                from sources.net_frame import NetFrameSource
+                src = NetFrameSource(host, link, "F1 25")
             self.manager = SingleManager(src, "F1 25")
         else:  # iRacing
             local = self.ir_local.isChecked()
