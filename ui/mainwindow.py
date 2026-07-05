@@ -1,10 +1,15 @@
-"""Main worksheet window — assembles the header, channel graphs, gauges, tyre
-panel and track map, and drives them from the SourceManager at ~30 Hz."""
+"""Main window in the classic MoTeC i2 layout: menu bar and toolbar on grey
+chrome, black worksheet area, worksheet tabs at the BOTTOM and a status bar
+carrying the connection / track / session readouts."""
 from __future__ import annotations
+
+import os
+import time
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sources import SourceManager
+from sources.laps import LapStore
 from . import theme
 from .channel_graphs import ChannelGraphs
 from .gauges import GaugePanel
@@ -13,138 +18,53 @@ from .trackmap import TrackMap
 from .gmeter import GMeter
 from .numeric import NumericReport
 from .channels import ChannelBrowser
-
-
-class StatusDot(QtWidgets.QWidget):
-    def __init__(self, label, parent=None):
-        super().__init__(parent)
-        self._on = False
-        self._label = label
-        self.setFixedSize(86, 20)
-
-    def set(self, on):
-        if on != self._on:
-            self._on = on
-            self.update()
-
-    def paintEvent(self, _):
-        p = QtGui.QPainter(self)
-        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        col = QtGui.QColor(theme.THROTTLE if self._on else theme.FG_FAINT)
-        p.setBrush(col)
-        p.setPen(QtCore.Qt.PenStyle.NoPen)
-        p.drawEllipse(0, 5, 10, 10)
-        p.setPen(QtGui.QColor(theme.FG if self._on else theme.FG_DIM))
-        f = p.font(); f.setPointSize(9); f.setBold(self._on); p.setFont(f)
-        p.drawText(QtCore.QRectF(16, 0, 70, 20),
-                   QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                   self._label)
-        p.end()
-
-
-class Header(QtWidgets.QFrame):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("panel")
-        self.setFixedHeight(56)
-        lay = QtWidgets.QHBoxLayout(self)
-        lay.setContentsMargins(16, 6, 16, 6)
-        lay.setSpacing(18)
-
-        brand = QtWidgets.QLabel("LIVE TELEMETRY")
-        brand.setStyleSheet(f"color:{theme.ACCENT};font-size:18px;font-weight:800;"
-                            "letter-spacing:2px;")
-        lay.addWidget(brand)
-
-        self.game = self._big("—", theme.GEAR)
-        lay.addWidget(self.game)
-        lay.addWidget(self._sep())
-
-        self.track = self._big("waiting for a session…", theme.FG)
-        lay.addWidget(self.track)
-        lay.addWidget(self._sep())
-        self.session = self._big("", theme.FG_DIM)
-        lay.addWidget(self.session)
-
-        lay.addStretch(1)
-        self.dot_lmu = StatusDot("LMU")
-        self.dot_f1 = StatusDot("F1 25")
-        lay.addWidget(self.dot_lmu)
-        lay.addWidget(self.dot_f1)
-
-    def _big(self, text, color):
-        lab = QtWidgets.QLabel(text)
-        lab.setStyleSheet(f"color:{color};font-size:15px;font-weight:700;")
-        return lab
-
-    def _sep(self):
-        s = QtWidgets.QLabel("•")
-        s.setStyleSheet(f"color:{theme.FG_FAINT};font-size:14px;")
-        return s
-
-    def update_frame(self, f, status):
-        self.game.setText(f.game if f.connected else "—")
-        if f.connected:
-            self.track.setText(f.track or "—")
-            self.session.setText(f.session or "")
-        else:
-            err = (status.get("error") or "").strip()
-            self.track.setText("ожидание данных…" if not err else "нет связи")
-            self.session.setText(err[:60])
-        self.dot_lmu.set(status["lmu"])
-        self.dot_f1.set(status["f1"])
+from .lapcompare import LapCompare
+from .histogram import HistogramSheet
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, f1_port=20777, manager=None):
         super().__init__()
-        self.setWindowTitle("Live Telemetry — iRacing / LMU / F1 25")
+        self.setWindowTitle("Phantom i2 — Sim Telemetry")
         self.resize(1600, 980)
         self.setStyleSheet(theme.QSS)
 
         self.mgr = manager if manager is not None else SourceManager(f1_port=f1_port)
         self.mgr.start()
+        self._paused = False
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
         root = QtWidgets.QVBoxLayout(central)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(4, 4, 4, 2)
+        root.setSpacing(4)
 
-        self.header = Header()
-        root.addWidget(self.header)
-
+        # ---- worksheets (tabs at the bottom, i2 style) ----------------
         self.tabs = QtWidgets.QTabWidget()
-        self.tabs.setStyleSheet(
-            f"QTabBar::tab{{background:{theme.PANEL};color:{theme.FG_DIM};padding:7px 18px;"
-            f"font-size:12px;font-weight:700;letter-spacing:1px;border:1px solid {theme.BORDER};"
-            f"border-bottom:none;border-top-left-radius:6px;border-top-right-radius:6px;}}"
-            f"QTabBar::tab:selected{{background:{theme.PANEL_HI};color:{theme.ACCENT};}}"
-            f"QTabWidget::pane{{border:1px solid {theme.BORDER};border-radius:4px;top:-1px;}}")
+        self.tabs.setTabPosition(QtWidgets.QTabWidget.TabPosition.South)
         root.addWidget(self.tabs, 1)
 
         dash = QtWidgets.QWidget()
         body = QtWidgets.QHBoxLayout(dash)
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(8)
+        body.setContentsMargins(4, 4, 4, 4)
+        body.setSpacing(4)
 
-        # left column: graphs (stretch) + track map
+        # left column: graphs (stretch) + bottom strip
         left = QtWidgets.QVBoxLayout()
-        left.setSpacing(8)
+        left.setSpacing(4)
         self.graphs = ChannelGraphs()
         gframe = QtWidgets.QFrame()
         gframe.setObjectName("panel")
         gl = QtWidgets.QVBoxLayout(gframe)
-        gl.setContentsMargins(6, 6, 6, 6)
+        gl.setContentsMargins(2, 2, 2, 2)
         gl.addWidget(self.graphs)
         left.addWidget(gframe, 1)
 
-        # bottom strip: track map + G-G meter + dense data table
         bottomw = QtWidgets.QWidget()
         bottomw.setFixedHeight(252)
         bl = QtWidgets.QHBoxLayout(bottomw)
         bl.setContentsMargins(0, 0, 0, 0)
-        bl.setSpacing(8)
+        bl.setSpacing(4)
         self.trackmap = TrackMap()
         self.trackmap.setFixedWidth(300)
         self.gmeter = GMeter()
@@ -158,7 +78,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # right column: gauges + tyres
         right = QtWidgets.QVBoxLayout()
-        right.setSpacing(8)
+        right.setSpacing(4)
         self.gauges = GaugePanel()
         right.addWidget(self.gauges)
         self.tyres = TyrePanel()
@@ -168,11 +88,25 @@ class MainWindow(QtWidgets.QMainWindow):
         rw.setFixedWidth(380)
         body.addWidget(rw)
 
-        self.tabs.addTab(dash, "  ДАШБОРД  ")
+        self.tabs.addTab(dash, "График")
 
-        # second tab: the complete iRacing channel list
+        # lap store + i2-style lap comparison worksheet
+        self.laps = LapStore()
+        self.lapcmp = LapCompare(self.laps)
+        self.tabs.addTab(self.lapcmp, "Круги / Дельта")
+
+        # i2-style histograms
+        self.hist = HistogramSheet()
+        self.tabs.addTab(self.hist, "Гистограммы")
+
+        # the complete channel list
         self.browser = ChannelBrowser()
-        self.tabs.addTab(self.browser, "  ВСЕ КАНАЛЫ  ")
+        self.tabs.addTab(self.browser, "Все каналы")
+
+        # ---- i2 chrome: menus, toolbar, status bar --------------------
+        self._build_menus()
+        self._build_toolbar()
+        self._build_statusbar()
 
         # render loop ~30 Hz
         self.timer = QtCore.QTimer(self)
@@ -180,18 +114,165 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer.timeout.connect(self._tick)
         self.timer.start()
 
+    # ------------------------------------------------------------------
+    def _build_menus(self):
+        mb = self.menuBar()
+
+        m_file = mb.addMenu("Файл")
+        act_shot = QtGui.QAction("Сохранить скриншот…", self)
+        act_shot.setShortcut("Ctrl+S")
+        act_shot.triggered.connect(self._screenshot)
+        m_file.addAction(act_shot)
+        m_file.addSeparator()
+        act_exit = QtGui.QAction("Выход", self)
+        act_exit.setShortcut("Alt+F4")
+        act_exit.triggered.connect(self.close)
+        m_file.addAction(act_exit)
+
+        m_tools = mb.addMenu("Инструменты")
+        self.act_pause = QtGui.QAction("Пауза экрана", self)
+        self.act_pause.setCheckable(True)
+        self.act_pause.setShortcut("Ctrl+P")
+        self.act_pause.toggled.connect(self._toggle_pause)
+        m_tools.addAction(self.act_pause)
+        act_reset = QtGui.QAction("Сбросить круги", self)
+        act_reset.triggered.connect(self._reset_laps)
+        m_tools.addAction(act_reset)
+
+        m_win = mb.addMenu("Окно")
+        group = QtGui.QActionGroup(self)
+        names = [("График", "F2"), ("Круги / Дельта", "F3"),
+                 ("Гистограммы", "F4"), ("Все каналы", "F5")]
+        self._ws_actions = []
+        for i, (name, key) in enumerate(names):
+            a = QtGui.QAction(name, self)
+            a.setCheckable(True)
+            a.setShortcut(key)
+            a.setChecked(i == 0)
+            a.triggered.connect(lambda _c, idx=i: self.tabs.setCurrentIndex(idx))
+            group.addAction(a)
+            m_win.addAction(a)
+            self._ws_actions.append(a)
+        self.tabs.currentChanged.connect(self._sync_ws_actions)
+
+        m_help = mb.addMenu("Справка")
+        act_about = QtGui.QAction("О программе", self)
+        act_about.triggered.connect(self._about)
+        m_help.addAction(act_about)
+
+    def _build_toolbar(self):
+        tb = QtWidgets.QToolBar("Основная")
+        tb.setMovable(False)
+        tb.setFloatable(False)
+        self.addToolBar(tb)
+        tb.addAction(self.act_pause)
+        shot = QtGui.QAction("Скриншот", self)
+        shot.triggered.connect(self._screenshot)
+        tb.addAction(shot)
+        tb.addSeparator()
+        for a in self._ws_actions:
+            tb.addAction(a)
+
+    def _build_statusbar(self):
+        sb = self.statusBar()
+        self.sb_conn = QtWidgets.QLabel("нет данных")
+        self.sb_track = QtWidgets.QLabel("—")
+        self.sb_sess = QtWidgets.QLabel("")
+        self.sb_lap = QtWidgets.QLabel("")
+        sb.addWidget(self.sb_conn)
+        sb.addWidget(self._sb_sep())
+        sb.addWidget(self.sb_track)
+        sb.addWidget(self._sb_sep())
+        sb.addWidget(self.sb_sess)
+        self.sb_rate = QtWidgets.QLabel("")
+        sb.addPermanentWidget(self.sb_lap)
+        sb.addPermanentWidget(self._sb_sep())
+        sb.addPermanentWidget(self.sb_rate)
+        self._frames = 0
+        self._rate_t0 = time.monotonic()
+
+    @staticmethod
+    def _sb_sep():
+        s = QtWidgets.QLabel("|")
+        s.setStyleSheet(f"color:{theme.CHROME_SH};")
+        return s
+
+    # ------------------------------------------------------------------
+    def _sync_ws_actions(self, idx):
+        if 0 <= idx < len(self._ws_actions):
+            self._ws_actions[idx].setChecked(True)
+
+    def _toggle_pause(self, on):
+        self._paused = on
+
+    def _reset_laps(self):
+        self.laps.__init__()
+        self.lapcmp._seen_version = -1
+
+    def _screenshot(self):
+        desk = os.path.join(os.path.expanduser("~"), "Desktop")
+        name = f"telemetry_{time.strftime('%Y%m%d_%H%M%S')}.png"
+        path = os.path.join(desk if os.path.isdir(desk) else os.getcwd(), name)
+        self.grab().save(path)
+        self.statusBar().showMessage(f"Скриншот: {path}", 4000)
+
+    def _about(self):
+        QtWidgets.QMessageBox.about(
+            self, "Phantom i2",
+            "Phantom i2 — Sim Telemetry\n\n"
+            "Живая телеметрия iRacing / Le Mans Ultimate / F1 25\n"
+            "в классическом стиле дата-логгера.\n\n"
+            "Часть экосистемы Phantom.")
+
+    # ------------------------------------------------------------------
     def _tick(self):
         f = self.mgr.poll()
         status = self.mgr.status()
-        self.graphs.push(f)
-        self.graphs.redraw(f)
-        self.gauges.update_frame(f)
-        self.tyres.update_frame(f)
-        self.trackmap.update_frame(f)
-        self.gmeter.update_frame(f)
-        self.numeric.update_frame(f)
-        self.browser.update_frame(f)
-        self.header.update_frame(f, status)
+        # record the lap and, when the sim itself gives no live delta
+        # (LMU / F1), compute it against our stored best lap
+        self.laps.push(f)
+        if abs(f.delta_best) < 1e-9:
+            ld = self.laps.live_delta(f)
+            if ld is not None:
+                f.delta_best = ld
+        if not self._paused:
+            self.lapcmp.update_frame(f)
+            self.hist.update_frame(f)
+            self.graphs.push(f)
+            self.graphs.redraw(f)
+            self.gauges.update_frame(f)
+            self.tyres.update_frame(f)
+            self.trackmap.update_frame(f)
+            self.gmeter.update_frame(f)
+            self.numeric.update_frame(f)
+            self.browser.update_frame(f)
+        self._update_statusbar(f, status)
+
+    def _update_statusbar(self, f, status):
+        if f.connected:
+            self.sb_conn.setText(f"● {f.game}")
+            self.sb_conn.setStyleSheet("color:#007000;font-weight:700;padding:0 6px;")
+            self.sb_track.setText(f.track or "—")
+            self.sb_sess.setText(f.session or "")
+            lap = f"Круг {f.lap}"
+            if f.total_laps:
+                lap += f"/{f.total_laps}"
+            if f.position:
+                lap += f" · P{f.position}"
+            self.sb_lap.setText(lap)
+        else:
+            err = (status.get("error") or "").strip()
+            self.sb_conn.setText("○ ожидание данных")
+            self.sb_conn.setStyleSheet(f"color:{theme.TEXT_DIM};padding:0 6px;")
+            self.sb_track.setText("—" if not err else err[:60])
+            self.sb_sess.setText("")
+            self.sb_lap.setText("")
+        self._frames += 1
+        now = time.monotonic()
+        if now - self._rate_t0 >= 1.0:
+            self.sb_rate.setText(f"{self._frames / (now - self._rate_t0):.0f} Гц")
+            self._frames = 0
+            self._rate_t0 = now
 
     def closeEvent(self, e):
         try:

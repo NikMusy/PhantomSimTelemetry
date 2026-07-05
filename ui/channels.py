@@ -64,10 +64,10 @@ class ChannelModel(QtCore.QAbstractTableModel):
             return int(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
         if role == QtCore.Qt.ItemDataRole.ForegroundRole:
             if col == 0:
-                return QtGui.QColor(theme.FG_DIM)
+                return QtGui.QColor(theme.TEXT)
             if col == 1:
-                return QtGui.QColor(theme.FG)
-            return QtGui.QColor(theme.FG_FAINT)
+                return QtGui.QColor(theme.ACCENT_CHROME)
+            return QtGui.QColor("#707070")
         return None
 
     # ---- updates ----------------------------------------------------
@@ -105,29 +105,24 @@ class ChannelModel(QtCore.QAbstractTableModel):
 class ChannelBrowser(QtWidgets.QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("panel")
         self._raw = {}
         self._units = {}
 
         root = QtWidgets.QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(6)
 
         top = QtWidgets.QHBoxLayout()
         top.setSpacing(10)
-        title = QtWidgets.QLabel("ВСЕ КАНАЛЫ iRACING")
-        title.setStyleSheet(f"color:{theme.ACCENT};font-size:14px;font-weight:800;"
-                            "letter-spacing:1px;")
+        title = QtWidgets.QLabel("Все каналы")
+        title.setStyleSheet(f"color:{theme.ACCENT_CHROME};font-size:13px;"
+                            "font-weight:700;letter-spacing:1px;")
         self.search = QtWidgets.QLineEdit()
         self.search.setPlaceholderText("поиск канала…  (напр. tyre, fuel, CarIdx)")
         self.search.setClearButtonEnabled(True)
-        self.search.setFixedHeight(32)
-        self.search.setStyleSheet(
-            f"QLineEdit{{background:{theme.BG};color:{theme.FG};border:1px solid {theme.BORDER};"
-            f"border-radius:6px;padding:0 10px;font-size:13px;}}"
-            f"QLineEdit:focus{{border:1px solid {theme.ACCENT};}}")
+        self.search.setFixedHeight(24)
         self.count = QtWidgets.QLabel("0 каналов")
-        self.count.setStyleSheet(f"color:{theme.FG_DIM};font-size:12px;")
+        self.count.setStyleSheet(f"color:{theme.TEXT_DIM};font-size:12px;")
         top.addWidget(title)
         top.addWidget(self.search, 1)
         top.addWidget(self.count)
@@ -142,11 +137,6 @@ class ChannelBrowser(QtWidgets.QFrame):
         self.view.verticalHeader().setVisible(False)
         self.view.verticalHeader().setDefaultSectionSize(22)
         self.view.setShowGrid(False)
-        self.view.setStyleSheet(
-            f"QTableView{{background:{theme.BG};alternate-background-color:{theme.PANEL_HI};"
-            f"color:{theme.FG};gridline-color:{theme.GRID};border:none;font-size:13px;}}"
-            f"QHeaderView::section{{background:{theme.PANEL};color:{theme.FG_DIM};"
-            f"border:none;border-bottom:1px solid {theme.BORDER};padding:6px;font-weight:700;}}")
         hh = self.view.horizontalHeader()
         hh.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Fixed)

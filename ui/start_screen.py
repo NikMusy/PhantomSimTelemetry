@@ -44,10 +44,10 @@ class GameCard(QtWidgets.QFrame):
         self._restyle()
 
     def _restyle(self):
-        border = self.accent if self._selected else theme.BORDER
+        border = self.accent if self._selected else theme.CHROME_SH
         bg = theme.PANEL_HI if self._selected else theme.PANEL
         self.setStyleSheet(
-            f"GameCard{{background:{bg};border:2px solid {border};border-radius:12px;}}")
+            f"GameCard{{background:{bg};border:2px solid {border};border-radius:0;}}")
 
     def mousePressEvent(self, _):
         self.clicked.emit()
@@ -56,7 +56,7 @@ class GameCard(QtWidgets.QFrame):
 class StartScreen(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Live Telemetry — выбор игры")
+        self.setWindowTitle("Phantom i2 — выбор симулятора")
         self.setStyleSheet(theme.QSS)
         self.setModal(True)
         self.setFixedWidth(880)
@@ -68,11 +68,11 @@ class StartScreen(QtWidgets.QDialog):
         root.setContentsMargins(26, 24, 26, 24)
         root.setSpacing(18)
 
-        brand = QtWidgets.QLabel("LIVE TELEMETRY")
-        brand.setStyleSheet(f"color:{theme.ACCENT};font-size:24px;font-weight:800;"
-                            "letter-spacing:3px;")
+        brand = QtWidgets.QLabel("PHANTOM i2 — SIM TELEMETRY")
+        brand.setStyleSheet(f"color:{theme.ACCENT_CHROME};font-size:20px;"
+                            "font-weight:800;letter-spacing:3px;")
         sub = QtWidgets.QLabel("Выберите симулятор и подключитесь")
-        sub.setStyleSheet(f"color:{theme.FG_DIM};font-size:13px;")
+        sub.setStyleSheet(f"color:{theme.TEXT_DIM};font-size:13px;")
         root.addWidget(brand)
         root.addWidget(sub)
 
@@ -80,14 +80,14 @@ class StartScreen(QtWidgets.QDialog):
         cards.setSpacing(16)
         self.card_lmu = GameCard("LMU", "Le Mans\nUltimate",
                                  "Подключение по сети (Radmin IP + порт) "
-                                 "к серверу LMU Pit Wall", theme.GEAR)
+                                 "к серверу LMU Pit Wall", theme.RPM)
         self.card_f1 = GameCard("F1 25/26", "F1 25 · 26",
                                 "UDP с игры + раздача стратегу по Radmin, "
                                 "или подключение к хосту", theme.SPEED)
         self.card_iracing = GameCard("iRACING", "iRacing",
                                      "Локально с этого ПК + раздача стратегу "
                                      "по Radmin, или подключение к хосту",
-                                     theme.BRAKE)
+                                     theme.STEER)
         self.card_lmu.clicked.connect(lambda: self._select("LMU"))
         self.card_f1.clicked.connect(lambda: self._select("F1 25"))
         self.card_iracing.clicked.connect(lambda: self._select("iRacing"))
@@ -117,12 +117,12 @@ class StartScreen(QtWidgets.QDialog):
         btns.addStretch(1)
         self.connect_btn = QtWidgets.QPushButton("ПОДКЛЮЧИТЬСЯ  ▶")
         self.connect_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        self.connect_btn.setFixedHeight(44)
+        self.connect_btn.setFixedHeight(38)
         self.connect_btn.setStyleSheet(
-            f"QPushButton{{background:{theme.ACCENT};color:#04141c;font-size:14px;"
-            f"font-weight:800;letter-spacing:1px;border:none;border-radius:8px;"
-            f"padding:0 28px;}}"
-            f"QPushButton:hover{{background:#6fe0ff;}}")
+            f"QPushButton{{background:{theme.ACCENT_CHROME};color:#ffffff;"
+            f"font-size:13px;font-weight:800;letter-spacing:1px;"
+            f"border:1px solid #000050;border-radius:0;padding:0 28px;}}"
+            f"QPushButton:hover{{background:#1a1a9a;}}")
         self.connect_btn.clicked.connect(self._connect)
         btns.addWidget(self.connect_btn)
         root.addLayout(btns)
@@ -351,7 +351,7 @@ class StartScreen(QtWidgets.QDialog):
     @staticmethod
     def _edit_qss():
         return (f"QLineEdit{{background:{theme.BG};color:{theme.FG};"
-                f"border:1px solid {theme.BORDER};border-radius:6px;padding:0 10px;"
+                f"border:1px solid {theme.BORDER};border-radius:0;padding:0 10px;"
                 f"font-size:14px;}}"
                 f"QLineEdit:focus{{border:1px solid {theme.ACCENT};}}"
                 f"QLineEdit:disabled{{color:{theme.FG_FAINT};}}")

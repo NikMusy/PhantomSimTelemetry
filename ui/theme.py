@@ -1,50 +1,182 @@
-"""Dark, dense colour palette for the live telemetry worksheet."""
+"""Classic MoTeC i2 Pro look: grey Windows chrome around pure-black plot
+areas, thin saturated traces (red / yellow / green / cyan / magenta), white
+list panes with black text, small Tahoma fonts, square corners everywhere."""
 
-# base surfaces
-BG = "#0a0c10"
-PANEL = "#111620"
-PANEL_HI = "#161c28"
-GRID = "#1d2533"
-BORDER = "#222b3a"
+# ---- application chrome (the grey i2 shell) -------------------------------
+CHROME = "#d4d0c8"          # classic window grey
+CHROME_LT = "#e6e2da"       # hovered / raised
+CHROME_DK = "#b8b4ac"       # pressed
+CHROME_SH = "#808080"       # bevel shadow / borders
+TEXT = "#000000"            # text on chrome
+TEXT_DIM = "#404040"
+LIST_BG = "#ffffff"         # white list panes (values, laps, channels)
+ACCENT_CHROME = "#000080"   # classic navy selection / highlights on grey
 
-# text
-FG = "#e6edf6"
-FG_DIM = "#8593a8"
-FG_FAINT = "#56627a"
+# ---- plot surfaces (the black i2 graph area) ------------------------------
+BG = "#000000"
+PANEL = "#000000"
+PANEL_HI = "#101010"
+GRID = "#3a3a3a"
+BORDER = "#808080"
 
-# channel colours (MoTeC-ish bright on black)
-SPEED = "#4fd1ff"
-THROTTLE = "#3ad16a"
-BRAKE = "#ff4d4d"
-GEAR = "#ffd24a"
-RPM = "#ff8c3b"
-STEER = "#c08bff"
-DELTA_POS = "#ff5d5d"
-DELTA_NEG = "#37e07a"
+# text on black surfaces
+FG = "#ffffff"
+FG_DIM = "#c0c0c0"
+FG_FAINT = "#7a7a7a"
 
-# tyre temp gradient stops (C)
+# ---- i2 trace palette (thin, saturated, on black) -------------------------
+SPEED = "#ff3232"           # ground speed — classic i2 red
+THROTTLE = "#00dc00"        # green
+BRAKE = "#ff2020"           # red (separate strip from speed, as in i2)
+GEAR = "#ff50ff"            # magenta
+RPM = "#ffff00"             # yellow
+STEER = "#00ffff"           # cyan
+DELTA_POS = "#ff5050"       # losing time
+DELTA_NEG = "#00dc00"       # gaining time
+
+# accent on BLACK surfaces (live lap, peak readouts)
+ACCENT = "#00ffff"
+
+# tyre temp gradient stops (C) — drawn on black tyre blocks
 TYRE_COLD = "#2f6bff"
-TYRE_OK = "#37e07a"
+TYRE_OK = "#00dc00"
 TYRE_HOT = "#ffb02e"
-TYRE_CRIT = "#ff3b3b"
-
-ACCENT = "#4fd1ff"
+TYRE_CRIT = "#ff3232"
 
 QSS = f"""
-QWidget {{
-    background: {BG};
-    color: {FG};
-    font-family: 'Segoe UI', 'Consolas', sans-serif;
-    font-size: 12px;
+QMainWindow, QDialog {{
+    background: {CHROME};
 }}
+QWidget {{
+    background: transparent;
+    color: {TEXT};
+    font-family: 'Tahoma', 'MS Shell Dlg 2', sans-serif;
+    font-size: 11px;
+}}
+QLabel {{ background: transparent; }}
 QFrame#panel, QWidget#panel {{
     background: {PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 6px;
+    border: 1px solid {CHROME_SH};
+    border-radius: 0;
 }}
-QLabel#h {{ color: {FG_DIM}; font-size: 10px; font-weight: 600; letter-spacing: 1px; }}
-QLabel#title {{ color: {FG}; font-size: 13px; font-weight: 700; letter-spacing: 1px; }}
-QToolTip {{ background: {PANEL_HI}; color: {FG}; border: 1px solid {BORDER}; }}
+QLabel#h {{ color: {FG_DIM}; font-size: 10px; font-weight: 700; letter-spacing: 1px; }}
+QLabel#title {{ color: {FG}; font-size: 12px; font-weight: 700; letter-spacing: 1px; }}
+
+QMenuBar {{
+    background: {CHROME};
+    color: {TEXT};
+    border-bottom: 1px solid {CHROME_SH};
+    font-size: 12px;
+}}
+QMenuBar::item {{ background: transparent; padding: 3px 9px; }}
+QMenuBar::item:selected {{ background: {ACCENT_CHROME}; color: #ffffff; }}
+QMenu {{
+    background: #f6f4ee;
+    color: {TEXT};
+    border: 1px solid {CHROME_SH};
+    font-size: 12px;
+}}
+QMenu::item {{ padding: 3px 24px 3px 20px; }}
+QMenu::item:selected {{ background: {ACCENT_CHROME}; color: #ffffff; }}
+QMenu::item:disabled {{ color: #9a9a9a; }}
+QMenu::separator {{ height: 1px; background: {CHROME_SH}; margin: 3px 6px; }}
+
+QToolBar {{
+    background: {CHROME};
+    border-bottom: 1px solid {CHROME_SH};
+    spacing: 2px;
+    padding: 1px 4px;
+}}
+QToolButton {{
+    background: {CHROME};
+    color: {TEXT};
+    border: 1px solid transparent;
+    padding: 2px 8px;
+    font-size: 11px;
+}}
+QToolButton:hover {{ background: {CHROME_LT}; border: 1px solid {CHROME_SH}; }}
+QToolButton:pressed, QToolButton:checked {{
+    background: {CHROME_DK}; border: 1px solid {CHROME_SH};
+}}
+
+QStatusBar {{
+    background: {CHROME};
+    color: {TEXT};
+    border-top: 1px solid #ffffff;
+    font-size: 11px;
+}}
+QStatusBar QLabel {{ color: {TEXT}; padding: 0 6px; }}
+QStatusBar::item {{ border: none; }}
+
+QTabWidget::pane {{ border: 1px solid {CHROME_SH}; background: {CHROME}; }}
+QTabBar::tab {{
+    background: {CHROME_DK};
+    color: {TEXT};
+    padding: 3px 16px;
+    border: 1px solid {CHROME_SH};
+    font-size: 11px;
+}}
+QTabBar::tab:selected {{ background: #ffffff; font-weight: 700; }}
+QTabBar::tab:!selected:hover {{ background: {CHROME_LT}; }}
+
+QTableWidget, QTableView {{
+    background: {LIST_BG};
+    color: {TEXT};
+    gridline-color: #d8d8d4;
+    alternate-background-color: #f2f2ee;
+    selection-background-color: {ACCENT_CHROME};
+    selection-color: #ffffff;
+    border: 1px solid {CHROME_SH};
+    font-size: 12px;
+}}
+QHeaderView::section {{
+    background: {CHROME};
+    color: {TEXT};
+    border: 1px solid {CHROME_SH};
+    border-left: none; border-top: none;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}}
+QTableCornerButton::section {{ background: {CHROME}; border: 1px solid {CHROME_SH}; }}
+
+QLineEdit {{
+    background: {LIST_BG};
+    color: {TEXT};
+    border: 1px solid {CHROME_SH};
+    border-radius: 0;
+    padding: 2px 6px;
+    selection-background-color: {ACCENT_CHROME};
+    selection-color: #ffffff;
+}}
+QLineEdit:disabled {{ background: {CHROME_LT}; color: #9a9a9a; }}
+QCheckBox {{ color: {TEXT}; font-size: 12px; }}
+QPushButton {{
+    background: {CHROME};
+    color: {TEXT};
+    border: 1px solid {CHROME_SH};
+    border-radius: 0;
+    padding: 4px 16px;
+    font-size: 12px;
+}}
+QPushButton:hover {{ background: {CHROME_LT}; }}
+QPushButton:pressed {{ background: {CHROME_DK}; }}
+
+QScrollBar:vertical {{
+    background: {CHROME}; width: 15px; border: 1px solid {CHROME_SH};
+}}
+QScrollBar::handle:vertical {{
+    background: {CHROME_DK}; border: 1px solid {CHROME_SH}; min-height: 24px;
+}}
+QScrollBar:horizontal {{
+    background: {CHROME}; height: 15px; border: 1px solid {CHROME_SH};
+}}
+QScrollBar::handle:horizontal {{
+    background: {CHROME_DK}; border: 1px solid {CHROME_SH}; min-width: 24px;
+}}
+QScrollBar::add-line, QScrollBar::sub-line {{ background: {CHROME}; border: 1px solid {CHROME_SH}; }}
+
+QToolTip {{ background: #ffffe1; color: {TEXT}; border: 1px solid #000000; font-size: 11px; }}
 """
 
 

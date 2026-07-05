@@ -1,5 +1,6 @@
-"""Dense numeric channel report — an ATLAS/MoTeC-style grid of live values for
-all the secondary channels that don't get their own trace or gauge."""
+"""Dense numeric channel report — an i2-style values pane: single-line
+"name … value" rows for all the secondary channels that don't get their own
+trace or gauge."""
 from __future__ import annotations
 
 from PyQt6 import QtCore, QtWidgets
@@ -21,7 +22,7 @@ CELLS = [
     ("VOLTS",  lambda f: (f"{f.voltage:.1f}", theme.BRAKE if 0 < f.voltage < 12 else theme.FG)),
 
     ("FUEL",   lambda f: (f"{f.fuel:.1f}L", theme.FG)),
-    ("FUEL %", lambda f: (f"{f.fuel_pct * 100:.0f}%", theme.GEAR if f.fuel_pct < 0.1 else theme.FG)),
+    ("FUEL %", lambda f: (f"{f.fuel_pct * 100:.0f}%", theme.RPM if f.fuel_pct < 0.1 else theme.FG)),
     ("FUEL/H", lambda f: (f"{f.fuel_per_hour:.1f}", theme.FG)),
     ("B.BIAS", lambda f: (f"{f.brake_bias:.1f}%", theme.FG)),
     ("ABS",    lambda f: _on(f.abs_active)),
@@ -43,7 +44,8 @@ CELLS = [
     ("CARS",   lambda f: (f"{f.num_cars}" if f.num_cars else "—", theme.FG)),
 ]
 
-COLS = 3
+COLS = 3           # column pairs (name + value), 8 rows
+VAL_QSS = "color:{col};font-size:13px;font-weight:700;"
 
 
 class NumericReport(QtWidgets.QFrame):
@@ -52,30 +54,29 @@ class NumericReport(QtWidgets.QFrame):
         self.setObjectName("panel")
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 8)
-        root.setSpacing(6)
+        root.setSpacing(4)
         title = QtWidgets.QLabel("DATA")
         title.setObjectName("h")
         root.addWidget(title)
 
         grid = QtWidgets.QGridLayout()
-        grid.setHorizontalSpacing(18)
-        grid.setVerticalSpacing(9)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(3)
         self._cells = []
         for i, (cap, _fn) in enumerate(CELLS):
             r, c = divmod(i, COLS)
-            cell = QtWidgets.QVBoxLayout()
-            cell.setSpacing(1)
             capw = QtWidgets.QLabel(cap)
-            capw.setStyleSheet(f"color:{theme.FG_DIM};font-size:12px;font-weight:600;"
-                               "letter-spacing:1px;")
+            capw.setStyleSheet(f"color:{theme.FG_DIM};font-size:10px;"
+                               "font-weight:700;letter-spacing:1px;")
             valw = QtWidgets.QLabel("—")
-            valw.setStyleSheet(f"color:{theme.FG};font-size:23px;font-weight:800;")
-            cell.addWidget(capw)
-            cell.addWidget(valw)
-            holder = QtWidgets.QWidget()
-            holder.setLayout(cell)
-            grid.addWidget(holder, r, c)
+            valw.setStyleSheet(VAL_QSS.format(col=theme.FG))
+            valw.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight |
+                              QtCore.Qt.AlignmentFlag.AlignVCenter)
+            grid.addWidget(capw, r, c * 2)
+            grid.addWidget(valw, r, c * 2 + 1)
             self._cells.append(valw)
+        for c in range(COLS):
+            grid.setColumnStretch(c * 2 + 1, 1)
         root.addLayout(grid)
         root.addStretch(1)
 
@@ -84,11 +85,11 @@ class NumericReport(QtWidgets.QFrame):
         for valw, (_cap, fn) in zip(self._cells, CELLS):
             if not live:
                 valw.setText("—")
-                valw.setStyleSheet(f"color:{theme.FG_FAINT};font-size:23px;font-weight:800;")
+                valw.setStyleSheet(VAL_QSS.format(col=theme.FG_FAINT))
                 continue
             try:
                 txt, col = fn(f)
             except Exception:
                 txt, col = "—", theme.FG
             valw.setText(str(txt))
-            valw.setStyleSheet(f"color:{col};font-size:23px;font-weight:800;")
+            valw.setStyleSheet(VAL_QSS.format(col=col))

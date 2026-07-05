@@ -6,7 +6,8 @@ binaries = []
 hiddenimports = ['websocket',
                  'sources.iracing_source', 'sources.net_frame',
                  'sources.lmu_source', 'sources.lmu_net_source',
-                 'sources.f1_source', 'sources.demo_source']
+                 'sources.f1_source', 'sources.demo_source',
+                 'sources.laps', 'ui.lapcompare']
 tmp_ret = collect_all('pyqtgraph')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 

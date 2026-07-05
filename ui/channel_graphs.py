@@ -87,6 +87,8 @@ class ChannelGraphs(QtWidgets.QWidget):
         self._t = np.zeros(0)
         self._data = np.zeros((len(CHANNELS), 0))
         self._hover_t = None
+        self._lap_marks = []        # (t, [InfiniteLine per plot])
+        self._last_lap_seen = None
 
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -102,7 +104,7 @@ class ChannelGraphs(QtWidgets.QWidget):
 
         self.plots, self.labels, self.curves, self.vlines = [], [], {}, []
         self._first = None
-        cur_pen = pg.mkPen(theme.FG_DIM, width=1, style=pg.QtCore.Qt.PenStyle.DashLine)
+        cur_pen = pg.mkPen("#ffffff", width=1)
 
         for r, (name, unit, specs, yr, _fmt) in enumerate(ROWS):
             lbl = pg.LabelItem(justify="left")
@@ -113,7 +115,7 @@ class ChannelGraphs(QtWidgets.QWidget):
             p.setMenuEnabled(False)
             p.setMouseEnabled(x=False, y=False)
             p.hideButtons()
-            p.showGrid(x=True, y=False, alpha=0.16)
+            p.showGrid(x=True, y=True, alpha=0.25)
             p.getAxis("left").setWidth(48)
             p.getAxis("left").setStyle(tickFont=_tickfont())
             p.getAxis("left").setTextPen(theme.FG_FAINT)
@@ -132,7 +134,7 @@ class ChannelGraphs(QtWidgets.QWidget):
             if yr and yr[0] < 0:
                 p.addLine(y=0, pen=pg.mkPen(theme.GRID, width=1))
             for key, color in specs:
-                curve = p.plot([], [], pen=pg.mkPen(color=color, width=1.7))
+                curve = p.plot([], [], pen=pg.mkPen(color=color, width=1.2))
                 self.curves[key] = (curve, IDX[key])
             vl = p.addLine(x=0, pen=cur_pen)
             vl.setVisible(False)
@@ -147,6 +149,38 @@ class ChannelGraphs(QtWidgets.QWidget):
     def push(self, f):
         self._max_rpm = max(self._max_rpm, f.max_rpm or 0, f.rpm or 0)
         self.buf.push(f.t, [fn(f) for _, fn in CHANNELS])
+        # i2-style lap gates: a dashed vertical line at every lap boundary
+        if f.connected and f.lap:
+            if self._last_lap_seen is not None and f.lap != self._last_lap_seen:
+                self._add_lap_mark(f.t, f.lap)
+            self._last_lap_seen = f.lap
+
+    def _add_lap_mark(self, t, lapno):
+        pen = pg.mkPen(theme.FG_FAINT, width=1,
+                       style=pg.QtCore.Qt.PenStyle.DashLine)
+        lines = []
+        for i, p in enumerate(self.plots):
+            if i == 0:
+                ln = pg.InfiniteLine(
+                    pos=t, angle=90, pen=pen, label=f"L{lapno}",
+                    labelOpts={"position": 0.86, "color": theme.FG_DIM,
+                               "fill": (0, 0, 0, 140)})
+            else:
+                ln = pg.InfiniteLine(pos=t, angle=90, pen=pen)
+            ln.setZValue(-5)
+            p.addItem(ln)
+            lines.append(ln)
+        self._lap_marks.append((t, lines))
+
+    def _prune_lap_marks(self, now):
+        while self._lap_marks and (self._lap_marks[0][0] < now - self.WINDOW_S * 1.3
+                                   or len(self._lap_marks) > 8):
+            _t, lines = self._lap_marks.pop(0)
+            for p, ln in zip(self.plots, lines):
+                try:
+                    p.removeItem(ln)
+                except Exception:
+                    pass
 
     def redraw(self, f):
         t, data = self.buf.view()
@@ -157,6 +191,7 @@ class ChannelGraphs(QtWidgets.QWidget):
         for key, (curve, ch) in self.curves.items():
             curve.setData(t, data[ch])
         now = t[-1]
+        self._prune_lap_marks(now)
         self._first.setXRange(now - self.WINDOW_S, now, padding=0)
         self.plots[IDX_ROW["ENGINE"]].setYRange(0, self._max_rpm * 1.05, padding=0)
         self._smax = max(self._smax, float(np.max(data[IDX["speed"]])) if len(t) else 0)
@@ -194,7 +229,7 @@ class ChannelGraphs(QtWidgets.QWidget):
         self._set_labels(vals, hovered=False)
 
     def _set_labels(self, v, hovered=False):
-        accent = theme.GEAR if hovered else None
+        # i2 legend style: channel name drawn in its trace colour
         for r, (name, unit, specs, yr, fmt) in enumerate(ROWS):
             if specs and specs[0][0] == "thr":
                 inner = (f"<span style='color:{theme.THROTTLE};font-size:15pt;"
@@ -202,7 +237,7 @@ class ChannelGraphs(QtWidgets.QWidget):
                          f"<span style='color:{theme.FG_FAINT};font-size:12pt'> / </span>"
                          f"<span style='color:{theme.BRAKE};font-size:15pt;"
                          f"font-weight:700'>{v.get('brk', 0):.0f}</span>")
-                col = theme.FG
+                nmcol = theme.THROTTLE
             else:
                 key, col = specs[0]
                 val = v.get(key, 0.0)
@@ -212,11 +247,13 @@ class ChannelGraphs(QtWidgets.QWidget):
                     txt = (fmt or "{:.0f}").format(val)
                 inner = (f"<span style='color:{col};font-size:17pt;"
                          f"font-weight:700'>{txt}</span>")
+                nmcol = col
+            if hovered:
+                nmcol = "#ffffff"
             u = f" <span style='color:{theme.FG_FAINT};font-size:8pt'>{unit}</span>" if unit else ""
-            nmcol = accent or theme.FG_DIM
             self.labels[r].setText(
                 f"<div style='line-height:1.02'>"
-                f"<span style='color:{nmcol};font-size:8.5pt;font-weight:600;"
+                f"<span style='color:{nmcol};font-size:8.5pt;font-weight:700;"
                 f"letter-spacing:1px'>{name}{u}</span><br>{inner}</div>")
 
 
@@ -232,5 +269,5 @@ def _zeros():
 
 
 def _tickfont():
-    fnt = QtGui.QFont("Consolas", 7)
+    fnt = QtGui.QFont("Tahoma", 7)
     return fnt
